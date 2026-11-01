@@ -103,6 +103,7 @@ Folder, settings file, rules file and run command for each bot:
 | S4 Donchian H4 Breakout | `s4_donchian_h4/` | `python run.py` |
 | S5 Mean Reversion (Asian) | `s5_mean_reversion/` | `python run.py` |
 | S6 Squeeze Breakout / NR7 | `s6_squeeze_breakout/` | `python run.py` (add `--set mode=nr7` for NR7) |
+| S7 Scalper (M1 candles) | `s7_scalper/` | `python run.py` (needs M1 data: DEPLOY_GUIDE Appendix D) |
 
 Each folder has `params.py` (settings you tune), `strategy.py` (the rules in code), `run.py`, `tuning_log.md` and a
 `results/` folder that fills with one sub-folder per run (report, trades, equity curve). Bots do not import
@@ -264,11 +265,50 @@ me in this session, so **these rules are my explicit version for you to review a
 
 ---
 
+## S7 - Scalper on M1 candles (`s7_scalper/`)
+
+**Idea.** Short trades (minutes) taken only in the busiest hours after the London and New York opens, where gold moves
+far enough that the spread is a small share of the risk. It runs on **M1** candles, so it needs the M1 data from
+DEPLOY_GUIDE Appendix D. Everything else (engine, costs, account rules, sizing) is shared with the other bots.
+
+**Windows (New York clock).** 03:00-05:00 (London open) and 08:00-10:30 (New York open). No trades outside them.
+**M5 trend** (completed M5 bars only): M5 EMA 20 above EMA 50 and rising over 3 bars = up; below and falling = down.
+
+**Breakout mode (default).** A M1 bar whose body is at least **0.8 x ATR(14)**, that closes in the outer **30%** of its
+range and beyond the previous **20** bars' high (long) or low (short), taken **only with the M5 trend**.
+**Pullback mode (`--set mode=pullback`).** Inside the M5 trend, price had been at least 1.0 x ATR away from the M1
+EMA 20 within the last 15 bars; then a bar reaches within 0.25 x ATR of the EMA and closes back on the trend side on a
+candle in the trend direction. `--set mode=both` runs both (breakout wins if both fire on one bar).
+
+**Exits and discipline.** Entry at the next bar's open. Stop = **max(1.5 x ATR, $1.00)**. Target = **1.5 x the stop**.
+Time stop **15 minutes**. Cooldown **10 minutes** after a signal. **8 trades per day**. Spread at most **0.30**.
+**Cost gate:** (spread + 0.15 slippage allowance) / stop must be at most **25%**, otherwise the signal is skipped, so a trade
+that would lose a quarter of its risk to costs before it starts is never taken.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `mode` | breakout | `breakout`, `pullback` or `both` |
+| `windows_ny` | 03:00-05:00, 08:00-10:30 | Trading windows, New York clock |
+| `range_bars` / `body_atr` / `close_pos` | 20 / 0.8 / 0.7 | Breakout definition |
+| `trend_filter` | True | Breakout only with the M5 trend |
+| `stop_atr` / `min_stop` / `rr` | 1.5 / 1.0 / 1.5 | Risk and reward |
+| `max_hold_bars` / `cooldown_bars` | 15 / 10 | Minutes |
+| `max_spread` / `cost_allow` / `max_cost_frac` | 0.30 / 0.15 / 0.25 | Cost controls |
+
+**Grid (18 runs):** `stop_atr` 1.0/1.5/2.0 x `rr` 1.0/1.5/2.0 x `max_hold_bars` 10/20.
+**Pass bar (stricter than A4):** the result must stay positive at `--cost-mult 2`, because live slippage on scalps is the
+biggest unknown. Trade counts are high, so require at least 400 out-of-sample trades.
+**Watch for:** the fixed slippage assumption (0.05 on entries, 0.10 on stop fills) is a guess that matters far more here than
+for the swing bots; measure real fills on the demo account before trusting any scalper result. A scalper that only works at
+cost x1 will not survive live.
+
+---
+
 # Part C - Order of work
 
 1. Install and run `python tests/test_engine.py` and `python tests/test_strategies.py` (both must pass).
 2. Sync your real candles (data tools) and run `python -m botcore.check_clock` to confirm the server-time offset.
-3. For each strategy in the order S1, S2, S3, S4, S5, S6: baseline (research mode), `--baseline 100`, `--cost-mult 2`, `--grid`, `--walkforward`, then the real-account run.
+3. For each strategy in the order S1, S2, S3, S4, S5, S6 (and S7 once the M1 data is loaded): baseline (research mode), `--baseline 100`, `--cost-mult 2`, `--grid`, `--walkforward`, then the real-account run.
 4. Record every run in that bot's `tuning_log.md`. Drop any strategy that fails the pass bar in A4.
 5. Only strategies that pass go forward to demo trading.
 

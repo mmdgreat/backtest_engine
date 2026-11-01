@@ -106,7 +106,7 @@ def usd(x, sign=False):
     return f"{'-' if x < 0 else ('+' if sign else '')}${abs(x):,.2f}"
 
 
-def console_summary(name, title, data_desc, acct, cost, s):
+def console_summary(name, title, data_desc, acct, cost, s, bar_min=5):
     """Readable multi-line block for the terminal. Plain text, fixed-width columns."""
     n = s["n"]
     wins = int(round(s["win_rate"] * n))
@@ -132,7 +132,7 @@ def console_summary(name, title, data_desc, acct, cost, s):
         out.append(line("Wins / losses", f"{wins:,} / {n - wins:,}   (win rate {100 * s['win_rate']:.1f}%)"))
         out.append(line("Long / short", f"{s['long']['n']:,} / {s['short']['n']:,}"))
         out.append(line("Trades per month", f"{s['trades_per_month']:.1f}"))
-        out.append(line("Average hold", f"{s['avg_bars']:.1f} bars (5 min each)"))
+        out.append(line("Average hold", f"{s['avg_bars']:.1f} bars ({bar_min:g} min each)"))
         out.append(line("Avg win / avg loss", f"{usd(s['avg_win_usd'])} / {usd(s['avg_loss_usd'])}"))
         out.append(line("Longest losing streak", f"{s['max_consec_losses']} trades"))
         out += ["", " RESULT"]

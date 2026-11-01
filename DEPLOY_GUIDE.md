@@ -380,4 +380,58 @@ C:\xauusd-bots\
       results\<name>\    report.md, trades.csv, summary.json, equity.png, grid.csv, walkforward_*.csv
 ```
 
+## Appendix D - Load M1 candles (needed before any scalping test)
+
+The six bots use M5. A scalper needs M1, and your broker may keep less M1 history than M5. Do this once.
+
+1. **Let MT5 hold the history.** In MT5: Tools > Options > Charts > set *Max bars in chart* to **Unlimited** and press OK.
+   Open an XAUUSD **M1** chart and press the **Home** key a few times (or hold it) so the terminal downloads older bars.
+   Keep MT5 open and logged in to your Vantage demo account.
+2. **Load it into MongoDB** (about 1.7 million bars for five years; it can take several minutes):
+
+```
+cd data_tools
+python sync_candles.py --tf M1 --since 2021-01-04
+```
+
+   It prints progress, then `now stored: ... bars, oldest ...`. If it prints a WARNING that the oldest bar is later than
+   2021-01-04, the broker simply does not hold that much M1 history: that is fine, scalp tests will then cover the years
+   available. Running the same command again later adds only newer bars.
+3. **Check it:**
+
+```
+python check_data.py --tf M1
+python check_m1_vs_m5.py
+```
+
+   `check_m1_vs_m5.py` builds M5 bars out of your M1 bars and compares them with your stored M5 bars. Expect
+   `OK: M1 agrees with M5 on 99.xx% ...`. A `CHECK:` means the M1 data or its time labels are wrong: paste the output to me
+   and do not run any scalping test until it is OK.
+
+## Appendix E - Test the scalper (S7, M1 data)
+
+Do Appendix D first and make sure `check_m1_vs_m5.py` says OK. All commands run from the project root with the
+virtual environment active.
+
+```
+python tests\test_strategies.py            # must pass, now includes the three scalper modes
+cd s7_scalper
+python run.py --research --out results\1_baseline
+python run.py --research --baseline 100 --out results\2_random_baseline
+python run.py --research --cost-mult 2 --out results\3_cost_x2
+python run.py --research --grid --walkforward --out results\4_grid_walkforward
+python run.py --out results\5_real_account
+```
+
+Try the other entry style with `--set mode=pullback` (or `--set mode=both`) added to any of those commands, and put a
+prefix on the output folder so runs do not overwrite each other, for example `--out results\pullback_1_baseline`.
+
+How to read it:
+- The number that matters is **exp R at cost x2** (run 3). Positive there means some margin for worse fills than the backtest assumed.
+- Check **trades**: with M1 data a real result needs hundreds of trades; below about 400 out-of-sample trades treat it as noise.
+- Walk-forward uses 6 months of training and 2 of testing. If your M1 history is short, add `--train-months 4 --test-months 2`.
+- The real-account run (run 5) uses 0.01 lot with the $1.00 minimum stop, so it can trade, but it halts when equity reaches the floor buffer. That is expected, and is the same rule every other bot follows.
+- Paste the console summaries here and I will interpret them, as with the other bots.
+
+If `run.py` stops with "No XAUUSD M1 candles found", the M1 data is not loaded: repeat Appendix D.
 

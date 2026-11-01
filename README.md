@@ -1,6 +1,6 @@
 # XAUUSD strategy bots
 
-Six independent backtest bots, one folder each, sharing one frozen simulation engine.
+Seven independent backtest bots (six on M5, one scalper on M1), one folder each, sharing one frozen simulation engine.
 **To install and test everything step by step, follow `DEPLOY_GUIDE.md`.**
 `STRATEGY_RULES.md` lists the rules every bot follows and the exact rules of each strategy.
 These are backtest bots: they never place orders.
@@ -15,12 +15,13 @@ s3_trend_pullback/       Trend Pullback
 s4_donchian_h4/          Donchian H4 Breakout
 s5_mean_reversion/       Mean Reversion (Asian session)
 s6_squeeze_breakout/     Volatility Squeeze / NR7 Breakout
+s7_scalper/              M1 scalper (needs M1 candles: DEPLOY_GUIDE Appendix D and E)
     params.py            settings you tune
     strategy.py          the rules in code
     run.py               the command line for this bot
     tuning_log.md        your notes, one row per run
     results/             created on the first run: one sub-folder per run
-data_tools/              Phase 1: MT5 check, sync candles to MongoDB, data quality check
+data_tools/              Phase 1: MT5 check, sync candles to MongoDB, data quality check, M1-vs-M5 check
 tests/                   engine tests and strategy look-ahead tests
 tools/                   synthetic data generator (for offline code checks only)
 ```

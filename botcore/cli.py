@@ -18,6 +18,7 @@ import pandas as pd
 
 from . import account as acc
 from . import report
+from . import settings
 from .data import load_market
 from .engine import BacktestResult, run_backtest
 from .metrics import basic, summarize
@@ -77,10 +78,12 @@ def main(P, S, argv=None):
     ap.add_argument("--no-plot", action="store_true")
     args = ap.parse_args(argv)
 
-    m = load_market(args.source, args.csv, start=args.start, end=args.end)
+    tf = getattr(P, "TIMEFRAME", None)          # strategies that need another base timeframe (the scalper: M1)
+    m = load_market(args.source, args.csv, tf=tf, start=args.start, end=args.end)
     print(f"[{P.NAME}] data: {m.describe()}")
-    if m.tf_sec != 300:
-        print(f"WARNING: base timeframe is {m.tf_sec // 60} min; the strategies are written for M5 data.")
+    want = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600}.get(tf or settings.TIMEFRAME, 300)
+    if m.tf_sec != want:
+        print(f"WARNING: base timeframe is {m.tf_sec // 60} min; this strategy is written for {want // 60}-min data.")
 
     params = apply_overrides(P.PARAMS, args.set)
     base_acct = acc.RESEARCH if args.research else acc.REAL
@@ -155,7 +158,7 @@ def main(P, S, argv=None):
     if not args.no_plot:
         report.save_equity_png(res.trades, os.path.join(out, "equity.png"), f"{P.TITLE} - {acct.label}",
                                acct.initial_capital, acct.equity_floor)
-    print(report.console_summary(P.NAME, P.TITLE, m.describe(), acct, cost, s))
+    print(report.console_summary(P.NAME, P.TITLE, m.describe(), acct, cost, s, bar_min=m.tf_sec / 60))
     print(f"  Files saved in: {out}")
     print(f"      report.md (full report)   trades.csv (every trade)   summary.json   equity.png\n")
     return res, s

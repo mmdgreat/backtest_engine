@@ -3,6 +3,7 @@
 Safe to run repeatedly: it resumes from the newest stored bar and upserts, so no duplicates.
 Run:  python sync_candles.py                 (default timeframes from config.py)
       python sync_candles.py --tf M1 M5 H1   (several timeframes)
+      python sync_candles.py --tf M1 --since 2021-01-04   (first M1 load: about 1.7M bars for 5 years, takes a while)
       python sync_candles.py --since 2022-01-01   (used only for a timeframe with no data yet)
       python sync_candles.py --backfill --since 2021-01-01   (load OLDER history before your oldest stored bar)
 
@@ -65,9 +66,12 @@ def sync_timeframe(coll, symbol, tf, since, backfill=False):
     newest_complete = end - timedelta(seconds=tf_sec)  # a bar is final only once it has closed
 
     print(f"[{tf}] from {start:%Y-%m-%d %H:%M} to {end:%Y-%m-%d %H:%M} (server time)")
-    cursor, total = start, 0
+    cursor, total, n_chunks = start, 0, 0
     step = timedelta(days=CHUNK_DAYS[tf])
     while cursor < end:
+        n_chunks += 1
+        if n_chunks % 25 == 0:
+            print(f"  ... {cursor:%Y-%m-%d} reached, {total:,} bars so far")
         chunk_end = min(cursor + step, end + timedelta(minutes=1))
         rates = mt5.copy_rates_range(symbol, TF_MAP[tf], cursor, chunk_end)
         if rates is None:
@@ -96,6 +100,15 @@ def sync_timeframe(coll, symbol, tf, since, backfill=False):
                 total += len(ops)
         cursor = chunk_end
     print(f"[{tf}] upserted {total} bars")
+    oldest = coll.find_one({"symbol": symbol, "tf": tf}, sort=[("time", 1)])
+    stored = coll.count_documents({"symbol": symbol, "tf": tf})
+    if oldest:
+        print(f"[{tf}] now stored: {stored:,} bars, oldest {oldest['time']}")
+        if not backfill and as_utc(oldest["time"]) - since > timedelta(days=14):
+            print(f"[{tf}] WARNING: the oldest bar is later than --since {since:%Y-%m-%d}. The broker/terminal only holds "
+                  f"history from about {oldest['time']:%Y-%m-%d}. If you need more, open a {tf} chart in MT5, set "
+                  "Tools > Options > Charts > Max bars in chart = Unlimited, press Home on the chart to download "
+                  "history, then run this again.")
 
 
 def save_specs(db, symbol):
