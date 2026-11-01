@@ -1,9 +1,9 @@
-# Deploy and Test Guide - six XAUUSD strategy bots
+# Deploy and Test Guide - seven XAUUSD strategy bots
 
 Follow the steps in order. Each step ends with a **Check** that tells you it worked before you move on.
 The rules of each strategy are in `STRATEGY_RULES.md`; this file is only about installing, loading data and testing.
 
-> **What "deploy" means here.** These six bots are **backtest bots**. They never place orders and never log in to
+> **What "deploy" means here.** These seven bots are **backtest bots**. They never place orders and never log in to
 > MT5. Only the small tools in `data_tools/` talk to MT5, and only to read candles. Following this guide installs
 > the test lab on your laptop, loads gold history into MongoDB and runs every strategy through the same tests.
 > Placing demo or live orders is a later phase, and only for strategies that pass these tests (Step 9).
@@ -16,7 +16,7 @@ The rules of each strategy are in `STRATEGY_RULES.md`; this file is only about i
 | 2 | Install | 10 min |
 | 3 | Verify the code (no data needed) | 2 min |
 | 4 | Load and check your data | 20 min plus download time |
-| 5 | Quick run of all six bots | 10-20 min |
+| 5 | Quick run of the six M5 bots (S7 scalper: Appendix D and E) | 10-20 min |
 | 6 | Full test of each strategy | see the note in Step 6 |
 | 7 | Record results and decide | 15 min per strategy |
 | 8 | Tune, one change at a time | ongoing |
@@ -141,7 +141,7 @@ session-based result (S1, S2, S3, S5, S6) until the offset is fixed. The message
 
 ---
 
-## Step 5 - Quick run of all six bots (smoke test on your real data)
+## Step 5 - Quick run of the six M5 bots (smoke test on your real data)
 
 This only checks that every bot runs on your data and produces trades. It says nothing about whether a strategy works.
 
@@ -251,7 +251,7 @@ that is a decision about account size or risk, not about the strategy.
 ## Step 7 - Record the results and decide
 
 1. In each bot's `tuning_log.md`, write one row for the baseline run (date, command, trades, exp R, PF, out-of-sample exp R, verdict).
-2. Fill one comparison table for all six (copy this into a note or spreadsheet):
+2. Fill one comparison table for all of them (copy this into a note or spreadsheet):
 
 | Strategy | Trades | Exp R | PF | Random baseline: % as good | Cost x2 exp R | OOS trades | OOS exp R | OOS PF | Windows profitable | Real account: end equity / halted? | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -262,6 +262,7 @@ that is a decision about account size or risk, not about the strategy.
 | S5 Mean rev. | | | | | | | | | | | |
 | S6 Squeeze | | | | | | | | | | | |
 | S6 NR7 | | | | | | | | | | | |
+| S7 Scalper (M1) | | | | | | | | | | | |
 
 3. Drop every DROP. Keep PASS and PROMISING. Expect that some, perhaps most, will fail; that is the test doing its job.
 
@@ -368,11 +369,11 @@ C:\xauusd-bots\
   DEPLOY_GUIDE.md        this guide
   STRATEGY_RULES.md      the rules of every strategy
   README.md              short overview
-  botcore\               shared engine (do not edit unless you mean to change the rules for all six bots)
-  data_tools\            MT5 check, candle sync, data quality check
+  botcore\               shared engine (do not edit unless you mean to change the rules for all bots)
+  data_tools\            MT5 check, candle sync, data quality check, M1-vs-M5 check, spread check
   tests\                 code tests
   tools\                 synthetic-data generator (offline code checks only)
-  s1_orb\ ... s6_squeeze_breakout\
+  s1_orb\ ... s7_scalper\
       params.py          the settings you tune
       strategy.py        the rules in code
       run.py             the command line for this bot
@@ -413,6 +414,10 @@ python check_m1_vs_m5.py
 Do Appendix D first and make sure `check_m1_vs_m5.py` says OK. All commands run from the project root with the
 virtual environment active.
 
+Then measure the spread you really pay (MT5 open and logged in): `cd data_tools`, `python check_spread.py`, `cd ..`.
+If it prints `CHECK`, add the `--spread-add X` it suggests to every `run.py` command below. A scalp makes or loses a few
+tenths of a dollar per ounce, so an understated spread matters more here than for any other bot.
+
 ```
 python tests\test_strategies.py            # must pass, now includes the three scalper modes
 cd s7_scalper
@@ -425,6 +430,7 @@ python run.py --out results\5_real_account
 
 Try the other entry style with `--set mode=pullback` (or `--set mode=both`) added to any of those commands, and put a
 prefix on the output folder so runs do not overwrite each other, for example `--out results\pullback_1_baseline`.
+To change the trading windows (New York clock) for one run: `--set windows_ny=03:00-05:00,08:00-10:30`.
 
 How to read it:
 - The number that matters is **exp R at cost x2** (run 3). Positive there means some margin for worse fills than the backtest assumed.

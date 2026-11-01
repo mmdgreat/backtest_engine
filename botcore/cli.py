@@ -6,6 +6,7 @@
     python run.py --walkforward        train/test walk-forward over that grid (research mode)
     python run.py --baseline 100       compare with 100 random-direction runs on the same entries
     python run.py --cost-mult 2        double spread and slippage (stress test)
+    python run.py --spread-add 0.10    add 0.10 to every bar's spread (measure yours: data_tools/check_spread.py)
     python run.py --set stop_atr=2.0   override any parameter for this run
 """
 import argparse
@@ -43,8 +44,14 @@ def apply_overrides(params, sets):
         elif isinstance(old, (list, tuple)):
             items = [x.strip() for x in v.split(",") if x.strip()]
             sample = old[0] if old else ""
-            p[k] = [int(x) if isinstance(sample, int) and not isinstance(sample, bool) else
-                    float(x) if isinstance(sample, float) else x for x in items]
+            if isinstance(sample, (list, tuple)):       # list of pairs, e.g. windows_ny=03:00-05:00,08:00-10:30
+                pairs = [[y.strip() for y in x.split("-")] for x in items]
+                if not pairs or any(len(pr) != len(sample) for pr in pairs):
+                    raise SystemExit(f"--set {k} expects ranges like 03:00-05:00,08:00-10:30, got {v}")
+                p[k] = pairs
+            else:
+                p[k] = [int(x) if isinstance(sample, int) and not isinstance(sample, bool) else
+                        float(x) if isinstance(sample, float) else x for x in items]
         else:
             p[k] = v
     return p
@@ -67,6 +74,7 @@ def main(P, S, argv=None):
     ap.add_argument("--floor", type=float)
     ap.add_argument("--risk-pct", type=float)
     ap.add_argument("--cost-mult", type=float, default=1.0)
+    ap.add_argument("--spread-add", type=float, default=0.0, metavar="PRICE")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     ap.add_argument("--grid", action="store_true")
     ap.add_argument("--walkforward", action="store_true")
@@ -79,7 +87,7 @@ def main(P, S, argv=None):
     args = ap.parse_args(argv)
 
     tf = getattr(P, "TIMEFRAME", None)          # strategies that need another base timeframe (the scalper: M1)
-    m = load_market(args.source, args.csv, tf=tf, start=args.start, end=args.end)
+    m = load_market(args.source, args.csv, tf=tf, start=args.start, end=args.end, spread_add=args.spread_add)
     print(f"[{P.NAME}] data: {m.describe()}")
     want = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600}.get(tf or settings.TIMEFRAME, 300)
     if m.tf_sec != want:
@@ -100,7 +108,8 @@ def main(P, S, argv=None):
     sigs = S.build_signals(m, params)
     res = run_backtest(m, sigs, acct, cost, **kw)
     s = summarize(res, sigs.tags)
-    mode = f"{acct.label} account (${acct.initial_capital:,.0f}, floor ${acct.equity_floor:,.0f}, cost x{cost.cost_mult:g})"
+    mode = (f"{acct.label} account (${acct.initial_capital:,.0f}, floor ${acct.equity_floor:,.0f}, cost x{cost.cost_mult:g}"
+            + (f", spread +{m.spread_add:g}" if m.spread_add else "") + ")")
     extra = []
 
     # ---- optional: random-direction baseline ----------------------------------------------

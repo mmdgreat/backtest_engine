@@ -16,7 +16,7 @@ COST = CostModel()
 PRICE = 2000.0
 
 
-def make_market(overrides=None, n=200, start="2025-03-03 10:00", gap_after=None, spread_pts=18):
+def make_market(overrides=None, n=200, start="2025-03-03 10:00", gap_after=None, spread_pts=18, spread_add=0.0):
     """Flat bars at 2000 (spread 0.18). overrides: {index: dict(o,h,l,c,spread)}."""
     t0 = pd.Timestamp(start)
     times, t = [], t0
@@ -31,7 +31,7 @@ def make_market(overrides=None, n=200, start="2025-03-03 10:00", gap_after=None,
         for key, col in (("o", "open"), ("h", "high"), ("l", "low"), ("c", "close"), ("spread", "spread")):
             if key in d:
                 df.loc[i, col] = d[key]
-    return Market(df)
+    return Market(df, spread_add=spread_add)
 
 
 def one_signal(m, i, side, stop, target=np.nan, **kw):
@@ -137,7 +137,8 @@ def test_weekend_gap_flatten_and_stale_signal():
     m = make_market({100: dict(o=2000, h=2001, l=1999.9, c=2000.4)}, n=200, gap_after=100)
     r = run(m, one_signal(m, 98, 1, 1996.0, 2012.0))
     t = r.trades.iloc[0]
-    assert t.reason == "gap_flat" and close(t.exit, 2000.4 - 0.05) and t.exit_time == m.when(100) and False or True
+    assert t.reason == "gap_flat" and close(t.exit, 2000.4 - 0.05), t
+    assert t.exit_time == pd.Timestamp(m.when(100)), t.exit_time      # closed on the last bar before the gap
     m = make_market(n=200, gap_after=100)
     r = run(m, one_signal(m, 100, 1, 1996.0, 2012.0))
     assert len(r.trades) == 0 and r.skips.get("stale_signal") == 1
@@ -168,6 +169,26 @@ def test_spread_filter_and_min_stop():
     m = make_market()
     r = run(m, one_signal(m, 100, 1, 1999.9, 2012.0))
     assert r.skips.get("stop_too_tight") == 1
+
+
+def test_spread_add_widens_the_spread_paid():
+    over = {101: dict(o=2000, h=2000.5, l=1999.5, c=2000), 102: dict(o=2000, h=2009, l=1999.8, c=2008.5)}
+    m = make_market(over, spread_add=0.10)
+    assert close(m.spread[101], 0.28), m.spread[101]
+    t = run(m, one_signal(m, 100, 1, 1996.0, 2008.0)).trades.iloc[0]
+    # ask = 2000 + 0.18 stored + 0.10 added, plus 0.05 slippage
+    assert t.reason == "target" and close(t.entry, 2000.33) and close(t.pnl, (2008.0 - 2000.33) * 1.0), t
+
+
+def test_set_override_parses_window_pairs():
+    from botcore.cli import apply_overrides
+    p = apply_overrides({"windows_ny": [["03:00", "05:00"]], "rr": 1.5}, ["windows_ny=02:00-04:00, 08:00-10:30", "rr=2"])
+    assert p["windows_ny"] == [["02:00", "04:00"], ["08:00", "10:30"]] and p["rr"] == 2.0, p
+    try:
+        apply_overrides({"windows_ny": [["03:00", "05:00"]]}, ["windows_ny=03:00"])
+        raise AssertionError("a window without an end time was accepted")
+    except SystemExit as e:
+        assert "03:00-05:00" in str(e)
 
 
 def test_signal_validation():

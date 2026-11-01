@@ -82,7 +82,9 @@ class HTF:
 
 
 class Market:
-    def __init__(self, df, point=None, server_minus_ny_hours=None):
+    def __init__(self, df, point=None, server_minus_ny_hours=None, spread_add=0.0):
+        """spread_add: price units added to every bar's stored spread, for when the candle field understates
+        the spread really paid (measure it with data_tools/check_spread.py)."""
         point = settings.POINT if point is None else point
         sm = settings.SERVER_MINUS_NY_HOURS if server_minus_ny_hours is None else server_minus_ny_hours
         df = clean(df)
@@ -95,7 +97,8 @@ class Market:
         self.h = df["high"].to_numpy(dtype=float)
         self.l = df["low"].to_numpy(dtype=float)
         self.c = df["close"].to_numpy(dtype=float)
-        self.spread = df["spread"].to_numpy(dtype=float) * point      # price units
+        self.spread_add = float(spread_add)
+        self.spread = df["spread"].to_numpy(dtype=float) * point + self.spread_add     # price units
         self.vol = df["tick_volume"].to_numpy(dtype=float)
         self.sday = self.ts // 86400                                    # trading day (rolls 5pm NY)
         d = np.diff(self.ts)
@@ -147,10 +150,10 @@ class Market:
 
     def describe(self):
         return (f"{self.n:,} bars | {self.when(0)} -> {self.when(self.n - 1)} (broker time) | "
-                f"base {self.tf_sec // 60} min")
+                f"base {self.tf_sec // 60} min" + (f" | spread +{self.spread_add:g}" if self.spread_add else ""))
 
 
-def load_market(source="mongo", csv=None, tf=None, start=None, end=None):
+def load_market(source="mongo", csv=None, tf=None, start=None, end=None, spread_add=0.0):
     if source == "csv":
         if not csv:
             raise SystemExit("--source csv needs --csv PATH")
@@ -162,4 +165,4 @@ def load_market(source="mongo", csv=None, tf=None, start=None, end=None):
             df = df[df["time"] < pd.Timestamp(end)]
     else:
         df = load_candles_mongo(tf=tf, start=start, end=end)
-    return Market(df)
+    return Market(df, spread_add=spread_add)

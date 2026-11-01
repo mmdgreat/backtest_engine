@@ -6,7 +6,7 @@ Seven independent backtest bots (six on M5, one scalper on M1), one folder each,
 These are backtest bots: they never place orders.
 
 ```
-DEPLOY_GUIDE.md          install, load data, test all six strategies, decide (start here)
+DEPLOY_GUIDE.md          install, load data, test every strategy, decide (start here)
 STRATEGY_RULES.md        the one rules document
 botcore/                 shared engine (data, sessions, indicators, fills, account rules, metrics, CLI)
 s1_orb/                  Opening Range Breakout
@@ -21,7 +21,7 @@ s7_scalper/              M1 scalper (needs M1 candles: DEPLOY_GUIDE Appendix D a
     run.py               the command line for this bot
     tuning_log.md        your notes, one row per run
     results/             created on the first run: one sub-folder per run
-data_tools/              Phase 1: MT5 check, sync candles to MongoDB, data quality check, M1-vs-M5 check
+data_tools/              Phase 1: MT5 check, sync candles to MongoDB, data quality check, M1-vs-M5 check, spread check
 tests/                   engine tests and strategy look-ahead tests
 tools/                   synthetic data generator (for offline code checks only)
 ```
@@ -49,6 +49,7 @@ python run.py                               real account: $100 start, $70 floor
 python run.py --research                    virtual $1,000,000, fixed $1,000 risk, judge the edge in R
 python run.py --research --baseline 100     compare with 100 random-direction runs
 python run.py --research --cost-mult 2      double spread and slippage
+python run.py --research --spread-add 0.10  add 0.10 to every bar's spread (measure yours: data_tools/check_spread.py)
 python run.py --research --grid             run the small parameter grid
 python run.py --research --grid --walkforward   out-of-sample test (the result that counts)
 python run.py --set rr=3 --set atr_mult=1.5     override settings for one run

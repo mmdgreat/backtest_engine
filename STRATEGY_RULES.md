@@ -1,11 +1,11 @@
 # XAUUSD Strategy Rules
 
-One document for all six bots. Part A is the rules every bot shares (account, costs, fills, testing).
+One document for all seven bots. Part A is the rules every bot shares (account, costs, fills, testing).
 Part B is one section per strategy: what it does, the exact entry/stop/exit rules, its default settings
 and what to tune. The numbers here match `params.py` in each strategy folder; if you change a `params.py`
 value, update the table here too.
 
-Status: all six bots are built, tested for look-ahead and run end to end on synthetic data.
+Status: all seven bots are built and tested for look-ahead; S1-S6 have also been run end to end on synthetic data.
 **None has been run on your real candles yet, so nothing here says whether any strategy has an edge.**
 
 ---
@@ -53,6 +53,7 @@ or all signals on this account. That is the rule working, not a bug. It also mea
 | Same bar touches stop and target | **The stop is assumed to hit first** |
 | Gap through a stop | Fills at the open of the gap, not at the stop price |
 | Spread filter | No entry when the bar's spread is above 0.50 (each strategy may set a tighter limit) |
+| Spread realism | MT5 keeps one spread number per candle, which can be lower than the spread at the moment of a fill. Measure the difference with `data_tools/check_spread.py` and add it to every bar with `--spread-add X` (the fills and every strategy's spread filter then use the wider spread) |
 | Minimum stop | Entries with a stop closer than 0.50 are skipped |
 | Commission | $0 (Standard STP assumed). For a Raw/ECN account set `commission_per_lot_per_side` in `botcore/account.py` |
 | Swap | -0.20 per ounce per night when a position crosses the 17:00 New York rollover (triple on Wednesday). Broker specific: read yours with `data_tools/mt5_check.py` and edit `botcore/account.py` |
@@ -87,7 +88,7 @@ Judge edge in research mode first; use the real mode to see whether the account 
 
 - **No news blackout.** There is no economic calendar in the data. Scheduled events (NFP, CPI, FOMC) are not avoided. Add a blackout list before any live use.
 - **M5 candles hide what happens inside a bar.** The stop-first rule is conservative. Re-test finalists on M1 data.
-- **Candles are bid.** Ask is bid + the stored spread, which is an approximation.
+- **Candles are bid.** Ask is bid + the stored spread, which is an approximation. Check it against ticks with `data_tools/check_spread.py`; it matters most for S7.
 - **Demo/backtest fills are kinder than live fills**, especially around news.
 - Synthetic data (`tools/make_synthetic_data.py`) checks that the code runs and is unbiased. It says nothing about gold.
 
