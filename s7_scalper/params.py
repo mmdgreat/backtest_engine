@@ -2,6 +2,7 @@
 
 This bot runs on M1 candles (TIMEFRAME below). Overrides for one run without editing this file:
     python run.py --research --set mode=pullback --set stop_atr=2.0
+    python run.py --research --set windows_ny=03:00-05:00,08:00-10:30
 """
 NAME = "s7_scalper"
 TITLE = "S7 Scalper (M1)"
